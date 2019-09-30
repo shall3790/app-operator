@@ -119,7 +119,7 @@ func (r *ReconcileAppService) Reconcile(request reconcile.Request) (reconcile.Re
 	}
 	//crdClient := dynClient.Resource(gVR)
 	bc := &buildv1.BuildConfig{}
-	err = c.Get(context.TODO(), types.NamespacedName{Name: "docker-build", Namespace: "shall-workspace"}, bc)
+	err = c.Get(context.TODO(), types.NamespacedName{Name: request.Name, Namespace: request.Namespace}, bc)
 	//crd, errCrd := crdClient.Namespace("shall-workspace").Get("docker-build", metav1.GetOptions{})
 	if err != nil {
 		reqLogger.Error(err, "Error getting resource")

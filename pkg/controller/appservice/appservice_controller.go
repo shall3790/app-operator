@@ -2,15 +2,15 @@ package appservice
 
 import (
 	"context"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/rest"
-
+	//"k8s.io/client-go/rest"
 
 	appv1alpha1 "github.com/example-inc/app-operator/pkg/apis/app/v1alpha1"
+	buildv1 "github.com/openshift/api/build/v1"
 	corev1 "k8s.io/api/core/v1"
-    buildv1 "github.com/openshift/api/build/v1"
-	"k8s.io/client-go/dynamic"
+	//"k8s.io/client-go/dynamic"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -85,6 +85,7 @@ var (
 		Resource: "BuildConfig",
 	}
 )
+
 // ReconcileAppService reconciles a AppService object
 type ReconcileAppService struct {
 	// This client, initialized using mgr.Client() above, is a split client
@@ -105,22 +106,30 @@ func (r *ReconcileAppService) Reconcile(request reconcile.Request) (reconcile.Re
 	reqLogger.Info("Reconciling AppService")
 
 	// Fetch the BuildConfig instance
-	config, _ := rest.InClusterConfig()
+	//config, _ := rest.InClusterConfig()
+	cfg, err := config.GetConfig()
 
-	//if err != nil {
-	//	reqLogger.Error(err, "Config Error")
-	//}
-	dynClient, errClient := dynamic.NewForConfig(config)
+	if err != nil {
+		reqLogger.Error(err, "Config Error")
+	}
+	//dynClient, errClient := dynamic.NewForConfig(cfg)
+	c, errClient := client.New(cfg, client.Options{})
 	if errClient != nil {
-		reqLogger.Error(errClient,"Error received creating client ")
+		reqLogger.Error(errClient, "Error received creating client ")
 	}
-	crdClient := dynClient.Resource(gVR)
+	//crdClient := dynClient.Resource(gVR)
+	bc := &buildv1.BuildConfig{}
+	err = c.Get(context.TODO(), types.NamespacedName{Name: "docker-build", Namespace: "shall-workspace"}, bc)
+	//crd, errCrd := crdClient.Namespace("shall-workspace").Get("docker-build", metav1.GetOptions{})
+	if err != nil {
+		reqLogger.Error(err, "Error getting resource")
+	} else {
+		reqLogger.Info("Got BuildConfig: %v", bc)
+		// update label
+		bc.ObjectMeta.Labels["test"] = "testval"
+		err = c.Update(context.TODO(), bc)
+	}
 
-	crd, errCrd := crdClient.Namespace("shall-workspace").Get("docker-build", metav1.GetOptions{})
-	if errCrd != nil {
-		reqLogger.Error(errCrd, "Error getting CRD")
-	}
-	reqLogger.Info("Got CRD: %v", crd)
 	//bcInstance := &buildv1.BuildConfig{}
 	//o := &unstructured.Unstructured{}
 	//err := r.client.Get(context.TODO(), request.NamespacedName, o)
@@ -137,7 +146,7 @@ func (r *ReconcileAppService) Reconcile(request reconcile.Request) (reconcile.Re
 
 	// Fetch the AppService instance
 	instance := &appv1alpha1.AppService{}
-	err := r.client.Get(context.TODO(), request.NamespacedName, instance)
+	err = r.client.Get(context.TODO(), request.NamespacedName, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
@@ -148,8 +157,6 @@ func (r *ReconcileAppService) Reconcile(request reconcile.Request) (reconcile.Re
 		// Error reading the object - requeue the request.
 		return reconcile.Result{}, err
 	}
-
-
 
 	// Define a new CR object
 	cm := newConfigMap(instance)
@@ -200,13 +207,7 @@ func (r *ReconcileAppService) Reconcile(request reconcile.Request) (reconcile.Re
 	} else {
 		// ConfigMap already exists
 		reqLogger.Info("ConfigMap already exists", "ConfigMap.Namespace", foundCm.Namespace, "ConfigMap.Name", foundCm.Name)
-}
-
-
-
-
-
-
+	}
 
 	// Pod already exists - don't requeue
 	// reqLogger.Info("Skip reconcile: Pod already exists", "Pod.Namespace", found.Namespace, "Pod.Name", found.Name)
@@ -229,7 +230,7 @@ func newPodForCR(cr *appv1alpha1.AppService) *corev1.Pod {
 				{
 					Name:    "busybox",
 					Image:   "busybox",
-					Command: []string{"/bin/sh", "-c", "echo hello " + cr.Spec.Name + ";sleep 3600" },
+					Command: []string{"/bin/sh", "-c", "echo hello " + cr.Spec.Name + ";sleep 3600"},
 				},
 			},
 		},
@@ -245,11 +246,11 @@ func newConfigMap(cr *appv1alpha1.AppService) *corev1.ConfigMap {
 	cm["firstkey"] = "SOMEDATA"
 
 	return &corev1.ConfigMap{
-		TypeMeta:   metav1.TypeMeta{},
+		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:		cr.Name + "-cm",
-			Namespace: 	cr.Namespace,
-			Labels:		labels,
+			Name:      cr.Name + "-cm",
+			Namespace: cr.Namespace,
+			Labels:    labels,
 		},
 		Data:       cm,
 		BinaryData: nil,

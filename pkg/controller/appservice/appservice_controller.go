@@ -117,7 +117,7 @@ func (r *ReconcileAppService) Reconcile(request reconcile.Request) (reconcile.Re
 	if errClient != nil {
 		reqLogger.Error(errClient, "Error received creating client ")
 	}
-	//crdClient := dynClient.Resource(gVR)
+
 	bc := &buildv1.BuildConfig{}
 	err = c.Get(context.TODO(), types.NamespacedName{Name: request.Name, Namespace: request.Namespace}, bc)
 	//crd, errCrd := crdClient.Namespace("shall-workspace").Get("docker-build", metav1.GetOptions{})
